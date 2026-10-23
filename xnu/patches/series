@@ -1,0 +1,14 @@
+# Riva (MSM8917/8940) XNU patch series -- scaffold
+# Format: <patch-file>  # <one-line description>
+0001-riva-machine-add.patch        # add RIVA platform / machine type to xnu config
+0002-riva-gicv2.patch              # GICv2 interrupt controller (qgic2 @0xb000000)
+0003-riva-sdhci.patch              # eMMC/SDHCI root device (sdhci @0x7824900)
+0004-riva-fb.patch                 # early framebuffer console @0x90000000
+0005-riva-timer.patch              # armv8 arch timer @ 19.2 MHz
+0006-riva-psci.patch               # PSCI SMP bring-up (4x Cortex-A53)
+0007-riva-display.patch            # MDSS + 720x1280 panel
+0008-riva-touch.patch              # Synaptics DSX HID (I2C 0x4b)
+0009-riva-pmic.patch               # PMI8950 PMIC / SPMI
+0010-riva-deviceid.patch           # report iPhone identity to userland
+0011-riva-adt.patch                # consume ADT from tools/mkadt-riva.py
+# NOTE: placeholders. Real diffs require xnu-8796 source + aarch64 toolchain.

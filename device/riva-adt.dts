@@ -1,0 +1,80 @@
+/dts-v1/;
+
+/ {
+    device_type = "boot";
+    model = "Xiaomi Redmi 5A (riva)";
+    compatible = "apple,arm-io", "riva";
+    #address-cells = <0x2>;
+    #size-cells = <0x2>;
+
+    chosen {
+        boot-args = "rd=ufsroot0 cpus=4 rivafb=0x90000000,0x01400000 gic=0x0b000000 sw_render ipanel=riva_hd";
+        memory-map = <0x0 0x0 0x0 0x0>;   // filled at shim time from real DRAM
+        boot-version = <0x1>;
+    };
+
+    // Apple "arm-io" platform node: SoC MMIO the XNU drivers bind to.
+    arm-io@0 {
+        device_type = "arm-io";
+        compatible = "riva-io";
+        #address-cells = <0x2>;
+        #size-cells = <0x2>;
+        ranges;
+
+        // GICv2 (riva uses GICv2, NOT the GICv3 sweet has)
+        interrupt-controller@0 {
+            device_type = "interrupt-controller";
+            compatible = "arm,gic-400";
+            interrupt-cells = <0x3>;
+            reg = <0x0 0x0b000000 0x0 0x1000
+                   0x0 0x0b002000 0x0 0x1000>;
+        };
+
+        // arch timer, 19.2 MHz XO (same as sweet's reference clock)
+        timer {
+            device_type = "timer";
+            compatible = "arm,armv8-timer";
+            clock-frequency = <19200000>;
+        };
+
+        // eMMC host (riva stores iOS root here, not UFS)
+        sdhci@0 {
+            device_type = "sdhci";
+            compatible = "qcom,sdhci-msm-v5";
+            reg = <0x0 0x07824900 0x0 0x2000>;
+            riva-root = <0x1>;   // userdata holds the HFS+ iOS root
+        };
+
+        // MDSS display subsystem
+        mdp@0 {
+            device_type = "display-pipe";
+            compatible = "qcom,mdss_mdp";
+            reg = <0x0 0x01a00000 0x0 0x90000>;
+        };
+    };
+
+    // Early framebuffer console (ABL leaves splash @ 0x90000000)
+    framebuffer@0x90000000 {
+        device_type = "framebuffer";
+        compatible = "riva-fb";
+        reg = <0x0 0x90000000 0x0 0x01400000>;
+        width = <0x2d0>;    // 720
+        height = <0x500>;   // 1280
+        depth = <0x20>;     // 32 bpp
+        stride = <0xb40>;   // 720*4 = 2880
+    };
+
+    cpus {
+        #address-cells = <0x1>;
+        #size-cells = <0x0>;
+        cpu0 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a53";
+            reg = <0x0>;
+            enable-method = "psci";
+        };
+        cpu1 { device_type = "cpu"; compatible = "arm,cortex-a53"; reg = <0x1>; enable-method = "psci"; };
+        cpu2 { device_type = "cpu"; compatible = "arm,cortex-a53"; reg = <0x2>; enable-method = "psci"; };
+        cpu3 { device_type = "cpu"; compatible = "arm,cortex-a53"; reg = <0x3>; enable-method = "psci"; };
+    };
+};

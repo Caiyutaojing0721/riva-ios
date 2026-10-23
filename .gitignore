@@ -1,0 +1,31 @@
+# ---- macOS / XNU build artifacts (from CI "buildtree" + local compiles) ----
+*.o
+*.a
+*.dSYM
+*.unstripped
+*.cpo
+buildtree.tgz
+dxb/
+xnu/
+build/
+fakeroot/
+SDKROOT/
+
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- payload / image outputs (large binaries, generated) ----
+*.bin
+*.img
+*.simg
+payload.bin
+out/
+shim/out/
+
+# ---- git-generated tools once you push to GitHub ----
+.DS_Store
+
+# ---- editor / os noise ----
+*.swp
+*~
