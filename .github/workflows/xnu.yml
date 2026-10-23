@@ -110,6 +110,44 @@ jobs:
           xcodebuild -version
           xcrun --find iig
 
+      - name: Verify riva patches apply cleanly (self-check)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # Resolve the SAME xnu tag build.sh will clone (macos-135 branch ->
+          # tag), clone it, apply our patches the SAME way (git apply --check
+          # then git apply), and HARD FAIL if RIVA is not registered. This turns
+          # the toolchain's silent "Skipping patch" into an explicit error.
+          MACOS_BRANCH=$(echo "${MACOS_VERSION}" | tr -d '.' | sed 's/^/macos-/')
+          RELEASE_URL="https://raw.githubusercontent.com/apple-oss-distributions/distribution-macOS/${MACOS_BRANCH}/release.json"
+          XNUTAG=$(curl -s "$RELEASE_URL" | jq -r '.projects[] | select(.project=="xnu") | .tag')
+          echo "resolved xnu tag (from ${MACOS_BRANCH}): $XNUTAG"
+          if [ ! -d xnu-selfcheck/xnu ]; then
+            git clone -q --depth 1 --branch "$XNUTAG" \
+              https://github.com/apple-oss-distributions/xnu.git xnu-selfcheck/xnu
+          fi
+          cd xnu-selfcheck/xnu
+          echo "=== base SUPPORTED_ARM64_MACHINE_CONFIGS (before our patches) ==="
+          grep -n "SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837" makedefs/MakeInc.def || echo "(not found)"
+          for P in ../../xnu/patches/*.patch; do
+            echo "--- checking patch: $P ---"
+            if git apply --check "$P" 2>err.txt; then
+              git apply "$P"
+              echo "    applied OK"
+            else
+              echo "!!! git apply FAILED for $P :"
+              cat err.txt
+              exit 1
+            fi
+          done
+          echo "=== SUPPORTED_ARM64_MACHINE_CONFIGS (after patches) ==="
+          grep -n "SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837" makedefs/MakeInc.def || echo "(NOT FOUND)"
+          if ! grep -q "RIVA" makedefs/MakeInc.def; then
+            echo "!!! RIVA not registered in MakeInc.def after apply — aborting"
+            exit 1
+          fi
+          echo "✓ RIVA registered — patches apply cleanly"
+
       - name: Build XNU for RIVA
         working-directory: dxb
         env:

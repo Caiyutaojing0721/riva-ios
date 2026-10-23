@@ -1,18 +1,29 @@
 diff --git a/config/MASTER.arm64.riva b/config/MASTER.arm64.riva
 new file mode 100644
-index 0000000..bce018d
+index 0000000..bbcb4ca
 --- /dev/null
 +++ b/config/MASTER.arm64.riva
-@@ -0,0 +1,4 @@
-+# riva bring-up config
+@@ -0,0 +1,15 @@
++# riva (Redmi 5A, MSM8917/8940) bring-up config
 +MACHINE_CONFIG = RIVA
 +KERNEL_CONFIG = DEVELOPMENT
 +arm64_ARCH_CONFIG = nos_arm_asm nos_arm_pmap
++
++CONFIG_HIBERNATION = 1
++CONFIG_PREEMPTION = 0
++CONFIG_FEATURES = std
++
++# No PAC, no 16K pages, GICv2-only SoC
++CONFIG_ARM64_PAC = 0
++CONFIG_ARM64_16K = 1
++
++CONFIG_KERNEL_INTEGRITY = 0
++CONFIG_CSR = 0
 diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
-index 9c692f5..4b8de5e 100644
+index 5bd6f23..eda706a 100644
 --- a/makedefs/MakeInc.def
 +++ b/makedefs/MakeInc.def
-@@ -16,7 +16,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+@@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
  else ifneq ($(findstring _host,$(RC_ProjectName)),)
  SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
  else
@@ -21,15 +32,15 @@ index 9c692f5..4b8de5e 100644
  
  endif
  
-@@ -25,6 +25,7 @@ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=ap
+@@ -61,6 +61,7 @@ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=ap
  MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
  MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a
  MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
 +MACHINE_FLAGS_ARM64_RIVA = -DARM64_BOARD_CONFIG_RIVA			-march=armv8-a
  
+ 
  #
- # ... later ...
-@@ -37,8 +38,10 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
+@@ -259,8 +260,10 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
  # Without embdedded device map, use a default arch string
  export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := $(shell echo $(CURRENT_ARCH_CONFIG) | tr A-Z a-z)
  ifneq ($(filter arm64,$(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG)),)
@@ -41,14 +52,14 @@ index 9c692f5..4b8de5e 100644
  endif
  
 diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
-index 381f13a..adef8bd 100644
+index 133b07f..3ceddf9 100644
 --- a/osfmk/arm64/proc_reg.h
 +++ b/osfmk/arm64/proc_reg.h
-@@ -1,6 +1,14 @@
- /* D-Cache. */
- #define MMU_CLINE   6
+@@ -205,6 +205,14 @@
+ /* D-Cache, 160KB for Firestorm, 8-way. 64KB for Icestorm, 6-way. */
+ #define MMU_CLINE   6                      /* cache line size is 1<<MMU_CLINE (64) */
  
-+#elif defined (RIVA)  /* Qualcomm MSM8917/8940: Cortex-A53 */
++#elif defined (RIVA)  /* Qualcomm MSM8917/8940 Cortex-A53 */
 +
 +/* I-Cache. */
 +#define MMU_I_CLINE 6
@@ -56,14 +67,14 @@ index 381f13a..adef8bd 100644
 +/* D-Cache. */
 +#define MMU_CLINE   6
 +
- #elif defined (BCM2837)
+ #elif defined (BCM2837) /* Raspberry Pi 3 */
  
- /* I-Cache. */
+ /* I-Cache. We don't have detailed spec so we just follow the ARM technical reference. */
 diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
-index ad44a29..719a61d 100644
+index 8226b8c..8964759 100644
 --- a/pexpert/pexpert/arm64/Makefile
 +++ b/pexpert/pexpert/arm64/Makefile
-@@ -2,7 +2,8 @@ PRIVATE_KERNELFILES = \
+@@ -17,7 +17,8 @@ PRIVATE_KERNELFILES = \
  	boot.h \
  	H13.h \
  	VMAPPLE.h \
@@ -75,50 +86,59 @@ index ad44a29..719a61d 100644
  # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
 diff --git a/pexpert/pexpert/arm64/RIVA.h b/pexpert/pexpert/arm64/RIVA.h
 new file mode 100644
-index 0000000..0360357
+index 0000000..32a6211
 --- /dev/null
 +++ b/pexpert/pexpert/arm64/RIVA.h
-@@ -0,0 +1,21 @@
-+/* Board config for the Xiaomi Redmi 5A (riva, MSM8917/8940). */
+@@ -0,0 +1,31 @@
++/*
++ * Board config for the Xiaomi Redmi 5A ("riva", MSM8917/8940).
++ * 4x Cortex-A53, ARMv8.0, GICv2, no PAC, no 16K pages, 32-bit PA.
++ */
 +#ifndef _PEXPERT_ARM64_RIVA_H
 +#define _PEXPERT_ARM64_RIVA_H
-+#define NO_MONITOR 1
-+#define NO_ECORE 1
-+#define RIVA 1
++
++#define NO_MONITOR                1
++#define NO_ECORE                  1
++
++#define RIVA                      1
++
 +#define ARM_ARCH_TIMER
-+#define __ARM_ARCH__ 8
-+#define __ARM_VMSA__ 8
-+#define __ARM_VFP__ 4
-+#define __ARM_COHERENT_CACHE__ 1
-+#define __ARM_DEBUG__ 7
-+#define __ARM_ENABLE_SWAP__ 1
-+#define __ARM_16K_PG__ 0
-+#define __ARM_V8_CRYPTO_EXTENSIONS__ 0
-+#define __ARM_PAN_AVAILABLE__ 0
-+#define HAS_GIC_V3 0
++#define __ARM_ARCH__              8
++#define __ARM_VMSA__              8
++#define __ARM_VFP__               4
++#define __ARM_COHERENT_CACHE__    1
++#define __ARM_DEBUG__             7
++#define __ARM_ENABLE_SWAP__       1
++
++#define __ARM_V8_CRYPTO_EXTENSIONS__ 1
++#define __ARM_PAN_AVAILABLE__     1
++#define __ARM_16K_PG__            1
++
++#define HAS_GIC_V3                0
++
 +#ifndef ASSEMBLER
 +#define PLATFORM_PANIC_LOG_DISABLED
-+#endif
-+#endif
++#endif /* ! ASSEMBLER */
++
++#endif /* ! _PEXPERT_ARM64_RIVA_H */
 diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
-index 0b0c61a..0667a5f 100644
+index 9454534..e11c17e 100644
 --- a/pexpert/pexpert/arm64/board_config.h
 +++ b/pexpert/pexpert/arm64/board_config.h
-@@ -1,6 +1,17 @@
- #define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
- #endif  /* ARM64_BOARD_CONFIG_BCM2837 */
+@@ -87,6 +87,16 @@
+ 
+ 
  
 +#ifdef ARM64_BOARD_CONFIG_RIVA
 +#include <pexpert/arm64/RIVA.h>
-+
 +#define MAX_L2_CLINE                   6
 +#define MAX_CPUS                       4
 +#define MAX_CPU_CLUSTERS               1
 +
-+#define CORE_NCTRS                     8
++#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
 +
 +#endif  /* ARM64_BOARD_CONFIG_RIVA */
 +
- #ifdef ARM64_BOARD_CONFIG_VMAPPLE
- #include <pexpert/arm64/VMAPPLE.h>
+ #ifdef ARM64_BOARD_CONFIG_BCM2837
+ #include <pexpert/arm64/BCM2837.h>
  
