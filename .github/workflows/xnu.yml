@@ -70,16 +70,22 @@ jobs:
       - name: Stage riva XNU patches
         run: |
           set -euo pipefail
+          shopt -s nullglob
           # bazel "build" script expects patches in dxb/patches. We stage:
           #   * the riva-specific series (xnu/patches/*.patch)
           #   * the reusable ios-sweet patches shared into xnu/patches/reuse/
           #   * any stage-*.sh staging scripts
           mkdir -p dxb/patches
-          cp xnu/patches/*.patch xnu/patches/reuse/ 2>/dev/null || true
-          cp xnu/patches/*.sh xnu/patches/ 2>/dev/null || true
-          # copy everything staged into where the builder applies patches
-          cp -f xnu/patches/*.patch dxb/patches/
-          cp -f xnu/patches/reuse/*.patch dxb/patches/ 2>/dev/null || true
+          declare -a PATCHES=( xnu/patches/*.patch xnu/patches/reuse/*.patch )
+          if [ "${#PATCHES[@]}" -eq 0 ]; then
+            echo "⚠️  no .patch files in xnu/patches/ -- nothing staged"
+            echo "    the build will fail later because there is no riva config"
+            echo "    run tools/stage-reuse-patches.sh and/or add 00NN-riva-*.patch"
+          else
+            cp -f xnu/patches/*.patch dxb/patches/ 2>/dev/null || true
+            cp -f xnu/patches/reuse/*.patch dxb/patches/ 2>/dev/null || true
+            cp -f xnu/patches/stage-*.sh dxb/patches/ 2>/dev/null || true
+          fi
           echo "=== staged patches ==="
           ls dxb/patches | wc -l
           ls dxb/patches
@@ -115,13 +121,24 @@ jobs:
         run: |
           SDK=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p sdk-kernel-platform
-          cp -R "$SDK/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/platform" sdk-kernel-platform/ || true
-          tar czf buildtree.tgz \
-            --exclude='*.o' --exclude='*.cpo' --exclude='*.a' --exclude='*.dSYM' \
-            --exclude='*.unstripped' --exclude='kernel.*.tmp' --exclude='.git' \
-            -C dxb build/xnu.obj fakeroot/usr/local/include xnu \
-            -C .. sdk-kernel-platform
-          ls -la buildtree.tgz
+          cp -R "$SDK/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/platform" sdk-kernel-platform/ 2>/dev/null || true
+          # The build tree only exists if the compile step produced output.
+          # Guard each source path so a (still-expected) build failure does
+          # not turn into a confusing tar "Cannot stat" error.
+          TAR_ARGS=()
+          for p in "dxb/build/xnu.obj" "dxb/fakeroot/usr/local/include" "dxb/xnu"; do
+            [ -e "$p" ] && TAR_ARGS+=("$p")
+          done
+          if [ "${#TAR_ARGS[@]}" -gt 0 ]; then
+            tar czf buildtree.tgz \
+              --exclude='*.o' --exclude='*.cpo' --exclude='*.a' --exclude='*.dSYM' \
+              --exclude='*.unstripped' --exclude='kernel.*.tmp' --exclude='.git' \
+              -C dxb "${TAR_ARGS[@]}" \
+              -C .. sdk-kernel-platform
+            ls -la buildtree.tgz
+          else
+            echo "no build tree produced (build did not reach object output) -- skipping"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -134,7 +151,16 @@ jobs:
         if: always()
         run: |
           mkdir -p out/kdk-libs
-          for lib in /Library/Developer/KDKs/*/System/Library/KernelSupport/lib*.a; do
+          # Guard: KDK is usually absent on public runners. If no KDK is
+          # installed, skip silently instead of emitting a '*' filename that
+          # upload-artifact would reject.
+          shopt -s nullglob
+          libs=( /Library/Developer/KDKs/*/System/Library/KernelSupport/lib*.a )
+          if [ "${#libs[@]}" -eq 0 ]; then
+            echo "no KDK libs found -- skipping"
+            exit 0
+          fi
+          for lib in "${libs[@]}"; do
             b=$(basename "$lib" .a)
             nm -m "$lib" > "out/kdk-libs/$b.nm.txt" 2>&1 || true
             lipo -info "$lib" >> out/kdk-libs/arch.txt 2>&1 || true
@@ -147,7 +173,7 @@ jobs:
           mkdir -p out
           cp -R dxb/fakeroot/System/Library/Kernels/. out/ 2>/dev/null || true
           ls -la out
-          (cd out && shasum -a 256 kernel.* 2>/dev/null > SHA256SUMS) || true
+          (cd out && shasum -a 256 kernel* 2>/dev/null > SHA256SUMS) || true
 
       - uses: actions/upload-artifact@v4
         if: always()

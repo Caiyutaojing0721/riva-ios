@@ -6,10 +6,23 @@
 *.cpo
 buildtree.tgz
 dxb/
-xnu/
 build/
 fakeroot/
 SDKROOT/
+
+# The xnu build toolchain checks out the xnu SOURCE into ./xnu at build time.
+# We must NOT ignore xnu/patches/ (that's our committed patch series!), so
+# ignore the checked-out source tree explicitly instead of the whole xnu/ dir.
+/xnu/external/
+/xnu/osfmk/
+/xnu/bsd/
+/xnu/iokit/
+/xnu/config/
+/xnu/makedefs/
+/xnu/pexpert/
+/xnu/SETUP/
+/xnu/Makefile
+/xnu/EXTERNAL_HEADERS/
 
 # ---- Python ----
 __pycache__/
